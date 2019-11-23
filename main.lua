@@ -1,7 +1,7 @@
 require "neat"
 
 function love.load()
-  love.physics.setMeter(20)
+  love.physics.setMeter(64)
   world = love.physics.newWorld(0, 0, true)
   world:setCallbacks(beginContact, endContact, preSolve, postSolve)
   persisting = 0
@@ -47,17 +47,16 @@ end
 function love.update(dt)
   world:update(dt) --this puts the world into motion
 	clearDead()
-	sliderBrainTick()
+	
 	
 	
   tick = tick + dt
   if tick >= tickrate then
 	tick = tick - tickrate
-	sliderNeeds()
 	sliderOutputs()
 	placeFood()
-	
-	
+	sliderNeeds()
+	sliderBrainTick()
   end
   
   
@@ -151,7 +150,7 @@ function newSlider(number, x, y)
 	
 	slider.body:setLinearDamping(1)
 	slider.body:setAngularDamping(1)
-	slider.body:setMass(slider.physicalGenetics.size)
+	slider.body:setMass(slider.physicalGenetics.size*0.1)
 	
 	--Don't ask me why, but facing right is the default position.
 	slider.body:setAngle(math.rad(math.random(0,360)))
@@ -199,6 +198,7 @@ function newSlider(number, x, y)
 	mutateBrain(slider.brain)
 	
 	slidersEver = slidersEver + 1
+	love.filesystem.append("neatlog.txt",'\nNew Slider: ' ..slider.ID)
 	return slider
 end
 
@@ -221,7 +221,7 @@ function mutateBrain(brain)
 	if choice == "newnode" then
 		local nodetypes = {"sig","lin","sqr","sin","abs","rel","gau","lat"}
 		local chosenNode = math.random(1,#nodetypes)
-		love.filesystem.append("neatlog.txt",'\n' ..chosenNode)
+		love.filesystem.append("neatlog.txt",'\nNode Type: ' ..nodetypes[chosenNode])
 		brain.hiddenNodes[#brain.hiddenNodes+1] = newNode(brain,nodetypes[chosenNode])
 	elseif choice == "newsynapse" then
 		local inputhiddenNodeID = 0
@@ -264,17 +264,23 @@ function mutateBrain(brain)
 		if outputnumber > 0 then
 			if inputhiddenNodeID > 0 then
 				--nodes are numbered after the first 11 input nodes. So input can be the ID
-				brain.outputNodes[outputnumber].synapses[#brain.outputNodes[outputnumber].synapses+1] = newSynapse(inputhiddenNodeID,math.random(-10,10)/10)
+				local randValue = math.random(-10,10)/10
+				brain.outputNodes[outputnumber].synapses[#brain.outputNodes[outputnumber].synapses+1] = newSynapse(inputhiddenNodeID,1)
 				brain.synapseNum = brain.synapseNum + 1
+				love.filesystem.append("neatlog.txt",'\nInput ID: ' ..inputhiddenNodeID ..'Value: 1')
 			else
 				--nodes are numbered after the first 11 input nodes. So input can be the ID
-				brain.outputNodes[outputnumber].synapses[#brain.outputNodes[outputnumber].synapses+1] = newSynapse(inputnumber,math.random(-10,10)/10)
+				local randValue = math.random(-10,10)/10
+				brain.outputNodes[outputnumber].synapses[#brain.outputNodes[outputnumber].synapses+1] = newSynapse(inputnumber,1)
 				brain.synapseNum = brain.synapseNum + 1
+				love.filesystem.append("neatlog.txt",'\nInput ID: ' ..inputnumber ..'Value: 1')
 			end
 		else
 			--if the hidden node is the output we don't have to worry about checking for a hidden node as an input.
-			brain.hiddenNodes[hiddenNodeTableNum].synapses[#brain.hiddenNodes[hiddenNodeTableNum].synapses+1] = newSynapse(inputnumber,math.random(-10,10)/10)
+			local randValue = math.random(-10,10)/10
+			brain.hiddenNodes[hiddenNodeTableNum].synapses[#brain.hiddenNodes[hiddenNodeTableNum].synapses+1] = newSynapse(inputnumber,1)
 			brain.synapseNum = brain.synapseNum + 1
+			love.filesystem.append("neatlog.txt",'\nInput ID: ' ..inputnumber ..'Value: 1')
 		end
 	elseif choice == "delnode" then
 		--since delnode is only available if there are hidden nodes, we don't need to check for them
@@ -286,18 +292,21 @@ function mutateBrain(brain)
 			end
 		end
 		-- clean up any synapses that had it as an input
-		if brain.synapseNum > #brain.inputs then
-			for i = 1,#brain.outputNodes do
-				if #brain.outputNodes[i].synapses > 0 then
-					for j = 1,#brain.outputNodes[i].synapses do
-						if brain.outputNodes[i].synapses[j].input == brain.hiddenNodes[num].ID then
-							table.remove(brain.outputNodes[i].synapses,j)
-							brain.synapseNum = brain.synapseNum - 1
-						end
+		--if brain.synapseNum > #brain.inputs then
+		for i = 1,#brain.outputNodes do
+			if #brain.outputNodes[i].synapses > 0 then
+				for j = 1,#brain.outputNodes[i].synapses do
+					if brain.outputNodes[i].synapses[j].input == brain.hiddenNodes[num].ID then
+						table.remove(brain.outputNodes[i].synapses,j)
+						brain.synapseNum = brain.synapseNum - 1
+						break
+						--this break might leave stranded synapses if the output node 
+						--has more than one that connect to the hidden node being deleted
 					end
 				end
 			end
 		end
+		--end
 		-- finally remove the node
 		table.remove(brain.hiddenNodes,num)
 	elseif choice == "delsynapse" then
@@ -308,14 +317,14 @@ function mutateBrain(brain)
 			for i = 1,#brain.hiddenNodes do
 				if #brain.hiddenNodes[i].synapses > 0 then
 					table.insert(hiddenNodeTableNums,i)
-					love.filesystem.append("neatlog.txt",'\nHiddenNodeWith Synapse Table Number: ' ..i)
+					--love.filesystem.append("neatlog.txt",'\nHiddenNodeWith Synapse Table Number: ' ..i)
 				end
 			end
 		end
 		for i = 1,#brain.outputNodes do
 			if #brain.outputNodes[i].synapses > 0 then
 				table.insert(outputNodeTableNums,i)
-				love.filesystem.append("neatlog.txt",'\nOutputNodeWith Synapse Table Number: ' ..i)
+				--love.filesystem.append("neatlog.txt",'\nOutputNodeWith Synapse Table Number: ' ..i)
 			end
 		end
 		-- now we count each set and pick one at random
@@ -323,12 +332,12 @@ function mutateBrain(brain)
 			if #hiddenNodeTableNums == 0 then
 				--just worry about output nodes
 				local num = math.random(1,#outputNodeTableNums)
-				love.filesystem.append("neatlog.txt",'\nOutputNodeTableNum num: ' ..num)
+				--love.filesystem.append("neatlog.txt",'\nOutputNodeTableNum num: ' ..num)
 				local outputnodetablenumber = 0
-				love.filesystem.append("neatlog.txt",'\nOutputNodeTableNum: ')
+				--love.filesystem.append("neatlog.txt",'\nOutputNodeTableNum: ')
 				love.filesystem.append("neatlog.txt",outputNodeTableNums[1])
 				outputnodetablenumber = outputNodeTableNums[num]
-				love.filesystem.append("neatlog.txt",'\nOutputNodeTableNum: ' ..outputnodetablenumber)
+				--love.filesystem.append("neatlog.txt",'\nOutputNodeTableNum: ' ..outputnodetablenumber)
 				table.remove(brain.outputNodes[outputnodetablenumber].synapses,1)
 				brain.synapseNum = brain.synapseNum - 1
 			else
@@ -492,7 +501,7 @@ function hatchEgg(egg)
 	baby.body:setAngularDamping(1)
 	--Don't ask me why, but facing right is the default position.
 	baby.body:setAngle(math.rad(math.random(0,360)))
-	baby.body:setMass(baby.physicalGenetics.size)
+	baby.body:setMass(baby.physicalGenetics.size*0.1)
 	
 	--FoV
 	local fovOffX = 0
@@ -571,10 +580,12 @@ function sliderOutputs()
 	--control forces
 	if #objects.sliders > 0 then
 		for i = 1, #objects.sliders do
-			objects.sliders[i].body:applyAngularImpulse(objects.sliders[i].brain.outputNodes[2].value)
+			local turning = objects.sliders[i].brain.outputNodes[2].value/math.sqrt((1+(objects.sliders[i].brain.outputNodes[2].value)^2))
+			objects.sliders[i].body:applyAngularImpulse(turning*objects.sliders[i].physicalGenetics.speed)
 			local angle = objects.sliders[i].body:getAngle()
 			local vector = angle2vector(angle)
-			objects.sliders[i].body:applyLinearImpulse(vector.x*(objects.sliders[i].brain.outputNodes[1].value*objects.sliders[i].physicalGenetics.speed),vector.y*(objects.sliders[i].brain.outputNodes[1].value*objects.sliders[i].physicalGenetics.speed))
+			local thrust = (objects.sliders[i].brain.outputNodes[1].value/math.sqrt((1+(objects.sliders[i].brain.outputNodes[1].value)^2)))*2
+			objects.sliders[i].body:applyLinearImpulse(vector.x*(thrust*objects.sliders[i].physicalGenetics.speed),vector.y*(thrust*objects.sliders[i].physicalGenetics.speed))
 		end
 	end
 end
@@ -672,13 +683,21 @@ end
 function sliderBrainTick()
 	if #objects.sliders > 0 then
 		for i = 1, #objects.sliders do
+			--love.filesystem.append("neatlog.txt",'\n' ..objects.sliders[i].ID ..' Brain Tick')
 			if #objects.sliders[i].brain.hiddenNodes > 0 then
+				--love.filesystem.append("neatlog.txt",'\nHidden Nodes: ' ..#objects.sliders[i].brain.hiddenNodes)
 				for j = 1,#objects.sliders[i].brain.hiddenNodes do
+					--love.filesystem.append("neatlog.txt",'\nHiddenNodeNumber: ' ..objects.sliders[i].brain.hiddenNodes[j].ID)
 					if #objects.sliders[i].brain.hiddenNodes[j].synapses > 0 then
+						--love.filesystem.append("neatlog.txt",'\nSynapses: ' ..#objects.sliders[i].brain.hiddenNodes[j].synapses)
 						local synapsevalue = 0
 						for k = 1,#objects.sliders[i].brain.hiddenNodes[j].synapses do
 							local nodekind, inputNode = getNode(objects.sliders[i].brain,objects.sliders[i].brain.hiddenNodes[j].synapses[k].input)
-							synapsevalue = synapsevalue + (inputNode*objects.sliders[i].brain.hiddenNodes[j].synapses[k].value)
+							if nodekind == "input" then
+								synapsevalue = synapsevalue + (inputNode*objects.sliders[i].brain.hiddenNodes[j].synapses[k].value)
+							else
+								synapsevalue = synapsevalue + (inputNode.value*objects.sliders[i].brain.hiddenNodes[j].synapses[k].value)
+							end
 						end
 						--{"sig","lin","sqr","sin","abs","rel","gau","lat"}
 						if objects.sliders[i].brain.hiddenNodes[j].nodetype == "lin" then
@@ -709,9 +728,12 @@ function sliderBrainTick()
 				end
 			end
 			for j = 1,#objects.sliders[i].brain.outputNodes do
+				--love.filesystem.append("neatlog.txt",'\nOutputNodeNumber: ' ..j)
 				if #objects.sliders[i].brain.outputNodes[j].synapses > 0 then
+					--love.filesystem.append("neatlog.txt",'\nSynapses: ' ..#objects.sliders[i].brain.outputNodes[j].synapses)
 					local synapsevalue = 0
 					for k = 1,#objects.sliders[i].brain.outputNodes[j].synapses do
+						--love.filesystem.append("neatlog.txt",'\nGetting Node: ' ..objects.sliders[i].brain.outputNodes[j].synapses[k].input)
 						local nodekind, inputNode = getNode(objects.sliders[i].brain,objects.sliders[i].brain.outputNodes[j].synapses[k].input)
 						if nodekind == "input" then
 							synapsevalue = synapsevalue + (inputNode * objects.sliders[i].brain.outputNodes[j].synapses[k].value)
